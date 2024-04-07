@@ -51,7 +51,6 @@ func (round *base) CanProceed() bool {
 	}
 	for _, ok := range round.ok {
 		if !ok {
-			common.Logger.Errorf("party %d, round %d can't proceed", round.PartyID().Index, round.number)
 			return false
 		}
 	}

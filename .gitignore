@@ -23,3 +23,4 @@ vendor
 .vscode/*.json
 
 onsign
+eddsa-cmp-onsign.proto

@@ -47,7 +47,7 @@ type (
 		srid []byte
 		u    []byte
 
-		payload []CmpKeyGenerationPayload
+		payload []*CmpKeyGenerationPayload
 
 		ssid      []byte
 		ssidNonce *big.Int
@@ -58,9 +58,6 @@ type (
 )
 
 type CmpKeyGenerationPayload struct {
-	// Public key share
-	publicX *crypto.ECPoint
-
 	// Schnorr ZKP
 	commitedA *crypto.ECPoint
 
@@ -93,7 +90,7 @@ func NewLocalParty(
 	p.temp.kgRound3Messages = make([]tss.ParsedMessage, partyCount)
 
 	// temp data init
-	p.temp.payload = make([]CmpKeyGenerationPayload, partyCount)
+	p.temp.payload = make([]*CmpKeyGenerationPayload, partyCount)
 	p.temp.srids = make([][]byte, partyCount)
 	p.temp.V = make([][]byte, partyCount)
 	return p
@@ -120,14 +117,14 @@ func (p *LocalParty) UpdateFromBytes(wireBytes []byte, from *tss.PartyID, isBroa
 }
 
 func (p *LocalParty) ValidateMessage(msg tss.ParsedMessage) (bool, *tss.Error) {
-	// if ok, err := p.BaseParty.ValidateMessage(msg); !ok || err != nil {
-	// 	return ok, err
-	// }
-	// // check that the message's "from index" will fit into the array
-	// if maxFromIdx := p.params.PartyCount() - 1; maxFromIdx < msg.GetFrom().Index {
-	// 	return false, p.WrapError(fmt.Errorf("received msg with a sender index too great (%d <= %d)",
-	// 		p.params.PartyCount(), msg.GetFrom().Index), msg.GetFrom())
-	// }
+	if ok, err := p.BaseParty.ValidateMessage(msg); !ok || err != nil {
+		return ok, err
+	}
+	// check that the message's "from index" will fit into the array
+	if maxFromIdx := p.params.PartyCount() - 1; maxFromIdx < msg.GetFrom().Index {
+		return false, p.WrapError(fmt.Errorf("received msg with a sender index too great (%d <= %d)",
+			p.params.PartyCount(), msg.GetFrom().Index), msg.GetFrom())
+	}
 	return true, nil
 }
 

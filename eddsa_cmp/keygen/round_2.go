@@ -28,11 +28,12 @@ func (round *round2) Start() *tss.Error {
 		msg := NewKGRound2Message(
 			round.PartyID(),
 			round.temp.ssid,
-			i,
 			round.temp.srid,
 			round.save.PubXi,
 			round.temp.commitedA,
 			round.temp.u,
+			round.save.PaillierPKs[i],
+			round.save.RingPedersenPKs[i],
 		)
 		round.temp.kgRound2Messages[i] = msg
 		round.out <- msg

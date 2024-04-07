@@ -8,8 +8,11 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
+	"github.com/bnb-chain/tss-lib/v2/crypto/modproof"
 	"github.com/bnb-chain/tss-lib/v2/crypto/schnorr"
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	paillierzkproof "github.com/getamis/alice/crypto/zkproof/paillier"
+	"google.golang.org/protobuf/proto"
 )
 
 func (round *round3) Start() *tss.Error {
@@ -29,20 +32,24 @@ func (round *round3) Start() *tss.Error {
 		}
 
 		r2Msg := msg.Content().(*KGRound2Message)
-		payload, err := r2Msg.Unmarshal(round.EC())
+
+		var err error
+		round.temp.payload[j], err = r2Msg.UnmarshalPayload(round.EC())
 		if err != nil {
 			return round.WrapError(err)
 		}
+		round.save.PubXj[j], err = r2Msg.UnmarshalPubXj(round.EC())
+		if err != nil {
+			return round.WrapError(err)
+		}
+		round.save.PaillierPKs[j] = r2Msg.UnmarshalPaillierPK()
+		round.save.RingPedersenPKs[j] = r2Msg.UnmarshalPedersenPK()
+		round.save.RingPedersenPKs[j].N = round.save.PaillierPKs[j].N
 
-		if !bytes.Equal(payload.ssid, round.temp.ssid) {
+		if !bytes.Equal(round.temp.payload[j].ssid, round.temp.ssid) {
 			common.Logger.Errorf("payload.ssid != round.temp.ssid, party: %d", j)
 			return round.WrapError(errors.New("ssid verify failed"))
 		}
-
-		round.temp.payload[j].ssid = payload.ssid
-		round.temp.payload[j].srid = payload.srid
-		round.save.PubXj[j] = payload.publicX
-		round.temp.payload[j].commitedA = payload.commitedA
 
 		common.Logger.Debugf("party: %d, round_3, calc V", i)
 		v := common.SHA512_256(
@@ -53,7 +60,10 @@ func (round *round3) Start() *tss.Error {
 			round.save.PubXj[j].Y().Bytes(),
 			round.temp.payload[j].commitedA.X().Bytes(),
 			round.temp.payload[j].commitedA.Y().Bytes(),
-			payload.u,
+			round.temp.payload[j].u,
+			round.save.PaillierPKs[j].N.Bytes(),
+			round.save.RingPedersenPKs[j].S.Bytes(),
+			round.save.RingPedersenPKs[j].T.Bytes(),
 		)
 
 		// Verify commited V_i
@@ -79,13 +89,39 @@ func (round *round3) Start() *tss.Error {
 			round.temp.commitedA.Y(),
 		),
 	)
-	common.Logger.Debugf("party: %d, round_3, calc schnorr proof", i)
-	proof := schnorr.Prove(round.EC().Params().N, round.temp.tau, challenge, round.save.PrivXi)
 
-	// BROADCAST schnorr proof
+	// Generate schnorr proof
+	common.Logger.Debugf("party: %d, round_3, calc schnorr proof", i)
+	schProof := schnorr.Prove(round.EC().Params().N, round.temp.tau, challenge, round.save.PrivXi)
+
+	// Generate mod proof
+	contextI := append(round.temp.ssid, big.NewInt(int64(i)).Bytes()...)
+	modProof, err := modproof.NewProof(contextI, round.save.PaillierSK.N,
+		round.save.PaillierSK.P, round.save.PaillierSK.Q, round.Rand())
+	if err != nil {
+		return round.WrapError(err, round.PartyID())
+	}
+
+	// Generate prm zk proof
+	pedPriv := round.save.RingPederssenSK
+	pedPub := round.save.RingPedersenPKs[i]
+	prmProof, err := paillierzkproof.NewRingPederssenParameterMessage(contextI, pedPriv.Euler,
+		pedPub.N, pedPub.S, pedPub.T, pedPriv.LambdaN, paillierzkproof.MINIMALCHALLENGE)
+	if err != nil {
+		common.Logger.Errorf("generate ring-Pedersen proof failed")
+		return round.WrapError(err)
+	}
+
+	// BROADCAST proofs
 	common.Logger.Infof("party: %d, round_3 broadcast", i)
 	{
-		msg := NewKGRound3Message(round.PartyID(), proof.Proof.Bytes())
+		prmProofBytes, err := proto.Marshal(prmProof)
+		if err != nil {
+			common.Logger.Errorf("marshal ring-Pedersen proof failed")
+			return round.WrapError(err)
+		}
+
+		msg := NewKGRound3Message(round.PartyID(), schProof.Proof.Bytes(), modProof, prmProofBytes)
 		round.temp.kgRound3Messages[i] = msg
 		round.out <- msg
 	}

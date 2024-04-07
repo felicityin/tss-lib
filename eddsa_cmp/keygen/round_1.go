@@ -7,7 +7,14 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
+	"github.com/bnb-chain/tss-lib/v2/crypto/paillier"
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	pailliera "github.com/felicityin/crypto-go/homo/paillier"
+)
+
+const (
+	// safePubKeySize is the permitted lowest size of Public Key.
+	safePubKeySize = 2048
 )
 
 // round 1 represents round 1 of the keygen part of the EDDSA TSS spec
@@ -50,6 +57,20 @@ func (round *round1) Start() *tss.Error {
 	round.save.Ks = ids
 	round.save.ShareID = ids[i]
 
+	// Generate 4*kappa long safe primes p, q with N = p*q
+	paillierKey, err := pailliera.NewPaillierSafePrime(safePubKeySize)
+	if err != nil {
+		common.Logger.Errorf("generate paillier keys failed")
+		return round.WrapError(err)
+	}
+	round.setPaillier(i, paillierKey)
+
+	// Set pederssen parameter from paillierKey
+	if err := round.genRingPederssen(i, paillierKey); err != nil {
+		return round.WrapError(err)
+	}
+
+	// Compute V_i
 	hash := common.SHA512_256(
 		ssid,
 		[]byte(strconv.Itoa(i)),
@@ -59,6 +80,9 @@ func (round *round1) Start() *tss.Error {
 		round.temp.commitedA.X().Bytes(),
 		round.temp.commitedA.Y().Bytes(),
 		round.temp.u,
+		round.save.PaillierPKs[i].N.Bytes(),
+		round.save.RingPedersenPKs[i].S.Bytes(),
+		round.save.RingPedersenPKs[i].T.Bytes(),
 	)
 
 	common.Logger.Infof("party: %d, round_1 broadcast", i)
@@ -69,6 +93,38 @@ func (round *round1) Start() *tss.Error {
 		round.temp.kgRound1Messages[i] = msg
 		round.out <- msg
 	}
+	return nil
+}
+
+func (round *round1) setPaillier(i int, paillierKey *pailliera.Paillier) {
+	round.save.PaillierSK = &paillier.PrivateKey{
+		PublicKey: paillier.PublicKey{N: paillierKey.GetN()},
+		LambdaN:   paillierKey.GetPrivLambda(),
+		PhiN:      paillierKey.GetPrivLambda(),
+		P:         paillierKey.GetPrivP(),
+		Q:         paillierKey.GetPrivQ(),
+	}
+	round.save.PaillierPKs[i] = &round.save.PaillierSK.PublicKey
+}
+
+func (round *round1) genRingPederssen(i int, paillierKey *pailliera.Paillier) error {
+	// Set pederssen parameter from paillierKey: Sample r in Z_N^ast, lambda = Z_phi(N), t = r^2 and s = t^lambda mod N
+	pederssen, err := paillierKey.NewPedersenParameterByPaillier()
+	if err != nil {
+		common.Logger.Errorf("generate ring-pedersen keys failed")
+		return err
+	}
+
+	round.save.RingPederssenSK = &paillier.PedPrivKey{
+		PedPubKey: paillier.PedPubKey{
+			N: pederssen.PedersenOpenParameter.GetN(),
+			S: pederssen.PedersenOpenParameter.GetS(),
+			T: pederssen.PedersenOpenParameter.GetT(),
+		},
+		LambdaN: pederssen.Getlambda(),
+		Euler:   pederssen.GetEulerValue(),
+	}
+	round.save.RingPedersenPKs[i] = &round.save.RingPederssenSK.PedPubKey
 	return nil
 }
 
