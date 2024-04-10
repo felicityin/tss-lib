@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package binance.tsslib.crypto.logroof;
+
+option go_package = "crypto/logproof";
+
+message LogStarMessage {
+    bytes salt = 1;
+    bytes S = 2;
+    bytes A = 3;
+    bytes Y = 4;
+    bytes D = 5;
+    string z1 = 6;
+    bytes z2 = 7;
+    string z3 = 8;
+}

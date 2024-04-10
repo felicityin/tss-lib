@@ -75,7 +75,7 @@ func (round *round4) Start() *tss.Error {
 
 		if err := prmProof.Verify(contextJ); err != nil {
 			common.Logger.Errorf("verify prm proof failed, party: %d", j)
-			return round.WrapError(errors.New("verify prm proof failed"))
+			return round.WrapError(err)
 		}
 	}
 
@@ -89,7 +89,7 @@ func (round *round4) Start() *tss.Error {
 		eddsaPubKey, err = eddsaPubKey.Add(pubx)
 		if err != nil {
 			common.Logger.Errorf("calc pubkey failed, party: %d", j)
-			return round.WrapError(errors.New("calc pubkey failed"))
+			return round.WrapError(err)
 		}
 	}
 	round.save.EdDSAPub = eddsaPubKey
