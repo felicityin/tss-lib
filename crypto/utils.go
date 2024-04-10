@@ -26,3 +26,17 @@ func GenerateNTildei(rand io.Reader, safePrimes [2]*big.Int) (NTildei, h1i, h2i 
 	h2 := common.GetRandomGeneratorOfTheQuadraticResidue(rand, NTildei)
 	return NTildei, h1, h2, nil
 }
+
+func Xor(bigArray, smallArray []byte) []byte {
+	if len(bigArray) < len(smallArray) {
+		return Xor(smallArray, bigArray)
+	}
+	result := make([]byte, len(bigArray))
+	for i := 0; i < len(smallArray); i++ {
+		result[i] = bigArray[i] ^ smallArray[i]
+	}
+	for i := len(smallArray); i < len(bigArray); i++ {
+		result[i] = bigArray[i]
+	}
+	return result
+}

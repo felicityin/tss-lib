@@ -25,6 +25,10 @@ type (
 		Alpha *crypto.ECPoint
 		T, U  *big.Int
 	}
+
+	Proof struct {
+		Proof *big.Int
+	}
 )
 
 // NewZKProof constructs a new Schnorr ZK proof of knowledge of the discrete logarithm (GG18Spec Fig. 16)
@@ -134,4 +138,20 @@ func (pf *ZKVProof) Verify(Session []byte, V, R *crypto.ECPoint) bool {
 
 func (pf *ZKVProof) ValidateBasic() bool {
 	return pf.Alpha != nil && pf.T != nil && pf.U != nil && pf.Alpha.ValidateBasic()
+}
+
+func Prove(q, committedSecret, challeng, secret *big.Int) *Proof {
+	t := new(big.Int).Mul(challeng, secret)
+	return &Proof{Proof: common.ModInt(q).Add(committedSecret, t)}
+}
+
+func (pf *Proof) Verify(commitedA, publicX *crypto.ECPoint, challeng *big.Int) bool {
+	ec := commitedA.Curve()
+	tG := crypto.ScalarBaseMult(ec, pf.Proof)
+	Xc := publicX.ScalarMult(challeng)
+	aXc, err := commitedA.Add(Xc)
+	if err != nil {
+		return false
+	}
+	return aXc.X().Cmp(tG.X()) == 0 && aXc.Y().Cmp(tG.Y()) == 0
 }
