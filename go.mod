@@ -8,9 +8,8 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.3
-	github.com/felicityin/crypto-go v0.0.0-20240406103822-9688a90b82bf // indirect
+	github.com/felicityin/crypto-go v0.0.0-20240406103822-9688a90b82bf
 	github.com/getamis/alice v1.0.3
-	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/ipfs/go-log v1.0.5
 	github.com/otiai10/primes v0.0.0-20210501021515-f1b2be525a11

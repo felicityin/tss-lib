@@ -68,25 +68,13 @@ func NewKnowExponentAndPaillierEncryption(
 	D := new(big.Int).Mul(new(big.Int).Exp(peds, alpha, pedN), new(big.Int).Exp(pedt, gamma, pedN))
 	D.Mod(D, pedN)
 
-	msgG, err := G.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	msgX, err := X.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	msgY, err := Y.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-
 	msgs := utils.GetAnyMsg(ssidInfo, new(big.Int).SetUint64(config.LAddEpsilon).Bytes(),
-		N0.Bytes(), pedN.Bytes(), C.Bytes(), S.Bytes(), A.Bytes(), D.Bytes(), msgG, msgX, msgY)
+		N0.Bytes(), pedN.Bytes(), C.Bytes(), S.Bytes(), A.Bytes(), D.Bytes(), G.Y().Bytes(), X.Y().Bytes(), Y.Y().Bytes())
 	e, salt, err := pailliera.GetE(curveN, msgs...)
 	if err != nil {
 		return nil, err
 	}
+
 	// z1 = α+ex
 	z1 := new(big.Int).Add(alpha, new(big.Int).Mul(e, x))
 	// z2 = r·ρ^e mod N_0
@@ -99,7 +87,8 @@ func NewKnowExponentAndPaillierEncryption(
 		Salt: salt,
 		S:    S.Bytes(),
 		A:    A.Bytes(),
-		Y:    msgY,
+		Yx:   Y.X().Bytes(),
+		Yy:   Y.Y().Bytes(),
 		D:    D.Bytes(),
 		Z1:   z1.String(),
 		Z2:   z2.Bytes(),
@@ -156,22 +145,13 @@ func (msg *LogStarMessage) Verify(
 	}
 	z3, _ := new(big.Int).SetString(msg.Z3, 10)
 
-	Y := G.ScalarMult(big1) // clone G
-	err = Y.UnmarshalJSON(msg.GetY())
-	if err != nil {
-		return err
-	}
-	msgG, err := G.MarshalJSON()
-	if err != nil {
-		return err
-	}
-	msgX, err := X.MarshalJSON()
+	Y, err := crypto.NewECPoint(G.Curve(), new(big.Int).SetBytes(msg.GetYx()), new(big.Int).SetBytes(msg.GetYy()))
 	if err != nil {
 		return err
 	}
 
 	msgs := utils.GetAnyMsg(ssidInfo, new(big.Int).SetUint64(config.LAddEpsilon).Bytes(),
-		N0.Bytes(), pedN.Bytes(), C.Bytes(), S.Bytes(), A.Bytes(), D.Bytes(), msgG, msgX, msg.GetY())
+		N0.Bytes(), pedN.Bytes(), C.Bytes(), S.Bytes(), A.Bytes(), D.Bytes(), G.Y().Bytes(), X.Y().Bytes(), Y.Y().Bytes())
 	seed, err := utils.HashProtos(msg.Salt, msgs...)
 	if err != nil {
 		return err
@@ -182,6 +162,7 @@ func (msg *LogStarMessage) Verify(
 	if err != nil {
 		return err
 	}
+
 	// Check z_1 in ±2^{l+ε}.
 	absZ1 := new(big.Int).Abs(z1)
 	if absZ1.Cmp(new(big.Int).Lsh(big2, uint(config.LAddEpsilon))) > 0 {
